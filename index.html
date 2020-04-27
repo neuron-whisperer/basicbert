@@ -1,0 +1,180 @@
+<html><head><title>basicbert</title></head>
+<body>
+<h1 id="basicbert">basicbert</h1>
+<p>A wrapper class and usage guide for Google&#39;s Bidirectional Encoder Representation from Transformers (BERT) text classifier.</p>
+<p>Written by David Stein (david@djstein.com).</p>
+<p>Also available at <a href="https://www.github.com/neuron-whisperer/basicbert">https://www.github.com/neuron-whisperer/basicbert</a>.</p>
+<h2 id="the-short-version">The Short Version</h2>
+<p>The purpose of this project is to provide a wrapper class for the Google BERT transformer-based machine learning model and a usage guide for text classification. The objective is to enable developers to apply BERT out-of-the-box for ordinary text classification tasks.</p>
+<h2 id="background">Background</h2>
+<p>Transformers have become the primary machine learning technology for text processing tasks. One of the best-known transformer platforms is <a href="https://github.com/google-research/bert">the Google BERT model</a>, which features several different pretrained models that may be generally applied to a variety of tasks with a modest amount of training. The BERT codebase includes a basic file (<code>run_classifier.py</code>) that can be configured for different tasks via a set of command-line parameters.</p>
+<p>Despite the impressive capabilities of Google BERT, the codebase suffers from a variety of limitations and disadvantages, such as the following:</p>
+<ul>
+<li><p>BERT is based on TensorFlow, and therefore suffers from the TensorFlow 1.x / 2.x dichotomy. The original BERT codebase (linked above) is TensorFlow 1.x code, some of which will not run natively in a TensorFlow 2.x environment. Efforts are under way to <a href="https://towardsdatascience.com/simple-bert-using-tensorflow-2-0-132cb19e9b22">translate BERT into TensorFlow 2.x</a>, but this has created a deep divide in the available code for various BERT applications and discussion topics.</p>
+</li>
+<li><p>BERT exhibits the standard TensorFlow problem of generating <em>a vast</em> amount of output, which commingles informational notices, progress indicators, and warnings, including &quot;deprecated code&quot; messages. It is not easy to turn off the excessive output or to filter out the parts that are relevant to the task at hand. Additionally, the warnings provide suggestions for migrate to TensorFlow 2.x, and some of them are not actually applicable (due to unwritten portions of the tensorflow.compat.v1 codebase!)</p>
+</li>
+<li><p><code>run_classifier.py</code> provides an abstract DataProcessor class, and then requires users to choose among several different subclasses for different examples: ColaProcessor, MnliProcessor, MrpcProcessor, and XnliProcessor. The README does not explain what these processors are. The codebase merely indicates, unhelpfully, that these processors are used for the CoLA, MNLI, MRPC, and XNLI data sets. Nothing in the repository guides users in choosing among the provided DataProcessors or writing their own in order to use BERT for their own data sets or applications.</p>
+</li>
+<li><p>BERT is written to use several of Google&#39;s machine learning initiatives: training on GPUs or TPUs, hosting models on <a href="https://www.tensorflow.org/hub">TensorFlow Hub</a>, and <a href="https://bert-as-service.readthedocs.io/en/latest/">hosting trained BERT models to serve clients from the cloud</a>. Unfortunately, these features are not supplemental to a vanilla BERT implementation that performs basic text classification. Rather, the BERT codebase expects to use these features by default, and then requires developers to figure out how to disable them. For example, BERT <em>requires</em> the use of the TPUEstimator class, and the TPU-based features must be turned off to force BERT into a CPU-training context. Also, BERT features parameters that are only used for distributed TPU-based training (such as <code>eval_batch_size</code>, <code>predict_batch_size</code>, <code>iterations_per_loop</code>) and that do not even make sense in other contexts - but the BERT codebase does not clearly explain these features.</p>
+</li>
+<li><p>The BERT codebase is poorly written and unnecessarily complicated. For example:</p>
+<ul>
+<li><p>Configuration is only by way of a long string of command-line parameters.</p>
+</li>
+<li><p>The standard example code (<code>run_classifier.py</code>) requires input files to be formatted with specific names (&quot;train.tsv&quot;, &quot;dev.tsv&quot;, and &quot;test.tsv&quot;). Also, the established format is peculiar: the train and dev sets require four columns including <em>a completely useless</em> third column; and test.tsv requires a header row that is silently discarded ignored (the others do not).</p>
+</li>
+<li><p>BERT lacks some standard features, such as displaying a per-epoch loss in the manner that we have come to expect from Keras training.</p>
+</li>
+<li><p>BERT does not save the labels as part of the model, so this basic information must be persisted somewhere by the user.</p>
+</li>
+<li><p><a name="timestamp">BERT can export a trained model to a named path, but it insists on creating a subfolder that is arbitrarily named according to a timestamp - such that loading the model <em>that was just exported</em> requires <a href="https://guillaumegenthial.github.io/serving-tensorflow-estimator.html#the-problem">clumsily searching the contents of the output folder</a>.</a></p>
+</li>
+</ul>
+</li>
+</ul>
+<p>These and many other problems arose during my initial experimentation with BERT for a simple project. The entire codebase and documentation entirely fail to answer basic questions, like: How do I export a trained model, or use one to predict the class of an input on the fly, in the manner of an API?</p>
+<p>My initial work with BERT required a significant amount of time examining and experimenting with the codebase to understand and circumvent these problems, and to wrangle BERT into a form that can be used with a minimum of hassle. The result is a simple wrapper class that can be (a) configured via a simple text configuration file and (b) invoked with simple commands to perform everyday classification tasks.</p>
+<h2 id="implementation">Implementation</h2>
+<p>The heart of this project is <a href="https://www.github.com/neuron-whisperer/basicbert/blob/master/basicbert.py"><code>basicbert.py</code></a>, which is designed to run in a Python 3 / TensorFlow 1.15.0 environment.</p>
+<p><code>basicbert.py</code> has been adapted from the Processor subclasses of <code>run_classifier.py</code>, and it reuses as much of the base code as possible. The wrapper exposes a few simple functions: <code>reset()</code>, <code>train()</code>, <code>eval()</code>, <code>test()</code>, <code>export()</code>, and <code>predict()</code>. It can be used in this manner to perform text classification of .tsv files with an arbitrarily collected set of labels. A set of utility functions is also provided to prepare the training data and to reset the training state.</p>
+<p><code>basicbert.py</code> can be configured by creating or editing a file called <code>config.txt</code> in the same folder as <code>basicbert.py</code>. The configuration file has a simple key/value syntax (e.g.: <code>num_train_epochs = 10</code>). If the file does not exist or does not contain some options, <code>basicbert.py</code> will default to some standard values.</p>
+<p><code>basicbert.py</code> subclasses the <code>logging.Filter</code> class and hooks a filter function to the TensorFlow logging process, which redirects all TensorFlow output to <code>filter(self, record)</code>. The filter function scrapes a minimal amount of needed data (training progress and loss) from the voluminous TensorFlow output and discards the rest. For debugging, <code>basicbert.py</code> can be configured to save the complete TensorFlow output to a separate text file (by setting the <code>tf_output_file</code> configuration parameter).</p>
+<p><code>basicbert.py</code> can export the model from the latest checkpoint and load it to perform inference. This likely requires saving the labels used for training, which BERT does not do by default. <code>basicbert.py</code> saves the list as <code>labels.txt</code> in the input folder, but this is configurable via <code>config.txt</code>.</p>
+<h2 id="usage">Usage</h2>
+<p>The following steps will train a BERT model and perform some testing and prediction.</p>
+<h3 id="step-1-prepare-codebase">Step 1: Prepare Codebase</h3>
+<ul>
+<li><p>Create a base folder.</p>
+</li>
+<li><p>Install TensorFlow 1.15 (preferably, but not necessarily, within a virtual environment within the base folder):</p>
+<pre><code>  python3 -m venv basicbert-<span class="hljs-keyword">env</span>
+  <span class="hljs-keyword">source</span> basicbert-<span class="hljs-keyword">env</span>/bin/activate
+  pip3 install tensorflow==<span class="hljs-number">1.15</span>
+</code></pre></li>
+<li><p>Download <a href="https://github.com/google-research/bert">the Google BERT master repository from GitHub</a>. Extract it and move all of the files into the base folder.</p>
+</li>
+<li><p>Download one of the Google BERT pretrained models from GitHub (such as <a href="https://storage.googleapis.com/bert_models/2018_10_18/uncased_L-12_H-768_A-12.zip">BERT-Base, Uncased</a>). Make a subfolder in the base folder called <code>bert_base</code> and extract the model files there. (The files should be stored in the <code>bert_base</code> folder, not <code>bert_base/bert_base_uncased/</code>, <em>etc.</em>)</p>
+</li>
+<li><p>Download <a href="https://www.github.com/neuron-whisperer/basicbert/blob/master/basicbert.py"><code>basicbert.py</code></a> and <a href="https://www.github.com/neuron-whisperer/basicbert/blob/master/config.txt"><code>config.txt</code></a> from this repository and copy them to the base folder.</p>
+</li>
+<li><p>Do one of the following two options:</p>
+<ul>
+<li><p>Download <a href="https://www.github.com/neuron-whisperer/basicbert/blob/master/run_classifier.py"><code>run_classifier.py</code></a> from this repository and copy it to the base folder, overwriting <code>run_classifier.py</code> from the Google BERT master repository.</p>
+</li>
+<li><p>Edit <code>run_classifier.py</code> from the Google BERT master repository and insert the following line of code (at line 681 of the current version of <code>run_classifier.py</code>, but this could change):</p>
+<pre><code>training_hooks=[tf<span class="hljs-selector-class">.train</span><span class="hljs-selector-class">.LoggingTensorHook</span>({<span class="hljs-string">'loss'</span>: total_loss}, every_n_iter=<span class="hljs-number">1</span>)],
+</code></pre></li>
+</ul>
+</li>
+</ul>
+<p>...as follows:</p>
+<pre><code>    output_spec = tf<span class="hljs-selector-class">.contrib</span><span class="hljs-selector-class">.tpu</span><span class="hljs-selector-class">.TPUEstimatorSpec</span>(
+        mode=mode,
+        loss=total_loss,
+        train_op=train_op,
+        training_hooks=[tf<span class="hljs-selector-class">.train</span><span class="hljs-selector-class">.LoggingTensorHook</span>({<span class="hljs-string">'loss'</span>: total_loss}, every_n_iter=<span class="hljs-number">1</span>)],
+        scaffold_fn=scaffold_fn)
+</code></pre><p>(Why is this necessary? Because BERT calculates the loss during training, but only reports the per-epoch loss during training if you request it - and <code>run_classifier.py</code> does not. See <a href="https://github.com/google-research/bert/issues/70">this GitHub thread</a> for more information about this modification.)</p>
+<h3 id="step-2-prepare-data">Step 2: Prepare Data</h3>
+<ul>
+<li><p>Make a subfolder in the base folder called <code>input</code> in the base folder.</p>
+</li>
+<li><p>Prepare the TSV files using one of the following three options:</p>
+<ul>
+<li><p>Generate <code>train.tsv</code>, <code>dev.tsv</code>, and <code>test.tsv</code>, for example, as discussed <a href="https://blog.insightdatascience.com/using-bert-for-state-of-the-art-pre-training-for-natural-language-processing-1d87142c29e7">here</a>. Yes, the formats are peculiar, including a completely useless column for no particular reason. Save the files in the input directory. <strong>Note:</strong> <code>basicbert.py</code> allows you to use any labels you want for your sentences. The only cautionary note is that <em>all</em> labels that are present in your evaluation data <em>must</em> be included in at least one training data row.</p>
+</li>
+<li><p>Prepare a master input file as a three-column CSV file, save it in the same folder as <code>basicbert.py</code>, and use <code>prepare_data()</code> to generate the tsv (<a href="#prepare_data">see below</a>).</p>
+</li>
+<li><p>Download <code>train.tsv</code>, <code>dev.tsv</code>, and <code>test.tsv</code> from any source you like. If you would like to experiment with an example data set, download <a href="https://www.github.com/neuron-whisperer/basicbert/blob/master/example_tsvs.zip">this example training data set</a> from the basicbert GitHub repository.</p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="step-3-use-basicbert">Step 3: Use basicbert</h3>
+<ul>
+<li><p>Review <code>config.txt</code> and make any changes that you&#39;d like to the configuration.</p>
+</li>
+<li><p>Train the BERT model using the following terminal command:</p>
+<pre><code>  python3 basicbert<span class="hljs-selector-class">.py</span> train
+</code></pre></li>
+</ul>
+<p>By default, <code>basicbert.py</code> will train a BERT model on ten epochs of the test data, reporting the loss for each epoch and saving checkpoints along the way. The training process can be canceled at any point, and will automatically resume from the last checkpoint.</p>
+<p>If <code>basicbert.py</code> finishes training for the number of epochs indicated in <code>config.txt</code>, then subsequent training commands will be disregarded unless the number of epochs is increased. Alternatively, you may specify the number of training epochs, which will be completed irrespective of the number of previously completed epochs:</p>
+<pre><code>    python3 basicbert<span class="hljs-selector-class">.py</span> train <span class="hljs-number">3</span>
+</code></pre><p><code>basicbert</code> can also be used programmatically:</p>
+<pre><code>    from <span class="hljs-keyword">basicbert </span>import *
+    <span class="hljs-keyword">bert </span>= <span class="hljs-keyword">BERT()
+</span>    <span class="hljs-keyword">bert.train() </span>    <span class="hljs-comment"># returns loss for the last training epoch</span>
+</code></pre><p>The BERT() initializer attempts to load its configuration from <code>config.txt</code> in the same folder as <code>basicbert.py</code>. If <code>config.txt</code> is not present, BERT will use predefined defaults. The BERT initializer optionally accepts a configuration dictionary and uses any values in the dictionary will take highest priority, and will fall back on <code>config.txt</code> or defaults for any values missing from the dictionary. </p>
+<ul>
+<li><p>Run the BERT model in evaluation mode (via terminal or Python) using either of the following:</p>
+<pre><code>  <span class="hljs-keyword">python3</span> basicbert.<span class="hljs-keyword">py</span> <span class="hljs-built_in">eval</span>
+  bert.<span class="hljs-built_in">eval</span>()
+</code></pre></li>
+</ul>
+<p><code>eval()</code> returns a dictionary of results, with keys: <code>eval_accuracy, eval_loss, global_step, loss</code>.</p>
+<ul>
+<li><p>Run the BERT model in test mode using either of the following:</p>
+<pre><code>  <span class="hljs-selector-tag">python3</span> <span class="hljs-selector-tag">basicbert</span><span class="hljs-selector-class">.py</span> <span class="hljs-selector-tag">test</span>
+  <span class="hljs-selector-tag">bert</span><span class="hljs-selector-class">.test</span>()
+</code></pre></li>
+</ul>
+<p><code>test()</code> returns an array of tuples, each representing the test result for one example. Each tuple has the following format: <code>(sample_id, best_label, best_confidence, {each_label: each_confidence})</code>.</p>
+<ul>
+<li><p>Export the BERT model:</p>
+<pre><code>  python3 basicbert.py <span class="hljs-keyword">export</span>
+  bert.<span class="hljs-keyword">export</span>()
+</code></pre></li>
+</ul>
+<p>As <a href="#timestamp">previously noted</a>, BERT is configured by default to export models to a subfolder of the output folder, where the subfolder is named by a timestamp. You may move the files to any other path you choose, and may indicate the new location in <code>config.txt</code>. If you choose to leave them in the output folder, when <code>basicbert.py</code> loads the model during prediction, it will examine the subfolders and choose the subfolder with the largest number (presumably the last and best checkpoint). <code>export()</code> returns the path of the exported model.</p>
+<ul>
+<li><p>Use an exported BERT model for inference:</p>
+<pre><code>  python3 basicbert<span class="hljs-selector-class">.py</span> predict (<span class="hljs-selector-tag">input</span> sentence)
+  bert.predict(text)
+</code></pre></li>
+</ul>
+<p>Example:</p>
+<pre><code>    python3 <span class="hljs-keyword">basicbert.py </span>predict The quick <span class="hljs-keyword">brown </span>fox <span class="hljs-keyword">jumped </span>over the lazy dogs.
+    <span class="hljs-keyword">bert.predict('The </span>quick <span class="hljs-keyword">brown </span>fox <span class="hljs-keyword">jumped </span>over the lazy dogs.<span class="hljs-string">')</span>
+</code></pre><p>The command-line call displays the predicted class, the probability, and the complete list of classes and probabilities. <code>predict()</code> returns a tuple of (string predicted_class, float probability, {string class: float probability}).</p>
+<p><strong>Note:</strong> As previously noted, an exported BERT model does not include the label set. Without the labels, BERT will have no idea how to map the predicted categories to the assigned labels. To address this deficiency, <code>predict()</code> looks for either <code>labels.txt</code> or <code>train.tsv</code> to retrieve the label set. A path to the label set file can be specified in <code>config.txt</code>.</p>
+<h2 id="utility-functions">Utility Functions</h2>
+<p>The following utility functions are also available for the following tasks:</p>
+<ul>
+<li><p><a name="prepare_data">Prepare .tsv data sets from a master data set:</a></p>
+<pre><code>  <span class="hljs-selector-tag">python3</span> <span class="hljs-selector-tag">basicbert</span><span class="hljs-selector-class">.py</span> <span class="hljs-selector-tag">prepare_data</span> 0<span class="hljs-selector-class">.95</span> 0<span class="hljs-selector-class">.025</span>
+  <span class="hljs-selector-tag">bert</span><span class="hljs-selector-class">.prepare_data</span>(0<span class="hljs-selector-class">.95</span>, 0<span class="hljs-selector-class">.025</span>, <span class="hljs-selector-tag">input_filename</span>, <span class="hljs-selector-tag">output_filename</span>)
+</code></pre></li>
+</ul>
+<p><code>prepare_data()</code> prepares .tsv files for use with BERT. It reads the specified file (or, by default, <code>data.csv</code> in the script folder), which should be a CSV that is formatted as follows:</p>
+<pre><code>    unique_per_sample_identifier, <span class="hljs-keyword">label</span><span class="bash">, text</span>
+</code></pre><p>For example:</p>
+<pre><code>    sentence_001, label_1, This is <span class="hljs-keyword">a</span> <span class="hljs-keyword">first</span> <span class="hljs-keyword">sentence</span> <span class="hljs-built_in">to</span> be classified.
+
+    sentence_002, label_2, This is <span class="hljs-keyword">a</span> <span class="hljs-keyword">second</span> <span class="hljs-keyword">sentence</span> <span class="hljs-built_in">to</span> be classified.
+</code></pre><p>Rows are separated by newline characters. Sentences may contain or omit quote marks. Sentences may contain commas (even without quote marks).</p>
+<p>The function accepts two floating-point parameters: train and dev, each indicating the number of rows to store in each file. The number of samples for the test set is calculated as (1.0 - train - dev). The function reads the sample data, shuffles the rows, and determines the number of samples to store in each file. It then writes the following files to the same folder:</p>
+<p><code>train.tsv</code>: tab-separated file for training data set</p>
+<p><code>dev.tsv</code>: tab-separated file for validation data set</p>
+<p><code>test.tsv</code>: tab-separated file for test data set</p>
+<p><code>labels.txt</code>: newline-separated list of labels</p>
+<p><code>test-labels.tsv</code>: tab-separated file of correct labels for test data, formatted as follows:</p>
+<pre><code>    unique_per_sample_identifier \t <span class="hljs-keyword">label</span><span class="bash"></span>
+</code></pre><ul>
+<li><p>Find an exported model in the output_dir folder and return its path:</p>
+<pre><code>  <span class="hljs-selector-tag">bert</span><span class="hljs-selector-class">.find_exported_model</span>()
+</code></pre></li>
+<li><p>Export the labels from the training data set (optionally specifying the output filename):</p>
+<pre><code>  <span class="hljs-selector-tag">bert</span><span class="hljs-selector-class">.export_labels</span>()
+</code></pre></li>
+<li><p>Reset the training of the BERT model (deletes the contents of the output folder):</p>
+<pre><code>  <span class="hljs-selector-tag">python3</span> <span class="hljs-selector-tag">basicbert</span><span class="hljs-selector-class">.py</span> <span class="hljs-selector-tag">reset</span>
+  <span class="hljs-selector-tag">bert</span><span class="hljs-selector-class">.reset</span>()
+</code></pre></li>
+</ul>
+<hr />
+<h3><a href="https://www.djstein.com/projects/">More Projects</a></H3>
+<hr />
+</body>
+</html>

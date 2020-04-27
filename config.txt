@@ -1,0 +1,67 @@
+# config.txt
+# This file is an example configuration file for the basicbert class.
+
+# Written by David Stein (david@djstein.com).
+# See https://www.djstein.com/basicbert/ for more info.
+# Source: https://github.com/neuron-whisperer/basicbert
+
+
+### Parameters About File and Folder Locations
+
+# data_dir: The input data directory containing the .tsv files.
+data_dir = input/
+
+# output_dir: The output directory where the model checkpoints will be saved.
+output_dir = output/
+
+# bert_config_file: The config.json file for the pre-trained BERT model.
+bert_config_file = bert_base/bert_config.json
+
+# vocab_file: The vocabulary file that the BERT model was trained on.
+vocab_file = bert_base/vocab.txt
+
+# init_checkpoint: The checkpoint of the pretrained BERT model.
+init_checkpoint = bert_base/bert_model.ckpt
+
+# exported_model_dir: A folder containing a saved_model.pb and variables/.
+# If this parameter is omitted (such as remaining commented out), BERT will
+# use the output directory to export models (and to look for exported models).
+# exported_model_dir = /path/to/exported/model/folder/
+
+# labels_file: A file containing the labels, which is saved during training
+# and read during prediction. If omitted or nonexistent, BERT will attempt
+# to read the labels from the training file.
+labels_file = output/labels.txt
+
+# tf_output_file: A file that receives complete output from TensorFlow. If
+# omitted (such as remaining commented out), BERT will discard all TensorFlow
+# output.
+# tf_output_file = output/tf_out.txt
+
+### Parameters About Input Data
+
+# do_lower_case: Whether input should be lower-cased (for uncased BERT model).
+do_lower_case = True
+
+# max_seq_length: Input length. Longer input is truncated; shorter input is
+# padded.
+max_seq_length = 256
+
+
+### Parameters About Training
+
+# warmup_proportion: Training inputs to use for linear learning warmup period.
+# Explanation of warmup: https://stackoverflow.com/a/55942518/1564195
+warmup_proportion = 0.05
+
+# learning_rate: Initial learning rate for the Adam optimizer.
+learning_rate = 5e-5
+
+# num_train_epochs: Number of training epochs to run.
+num_train_epochs = 10
+
+# train_batch_size: Number of batches per training step.
+train_batch_size = 25
+
+# save_checkpoint_steps: Frequency of checkpoints.
+save_checkpoint_steps = 10000
