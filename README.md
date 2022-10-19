@@ -70,7 +70,7 @@ The following steps will train a BERT model and perform some testing and predict
 
 * Download [`basicbert.py`](https://www.github.com/neuron-whisperer/basicbert/blob/master/basicbert.py) and [`config.txt`](https://www.github.com/neuron-whisperer/basicbert/blob/master/config.txt) from this repository and copy them to the base folder.
 
-* Do one of the following two options:
+* Perform one of the following two steps:
 
   * Download [`run_classifier.py`](https://www.github.com/neuron-whisperer/basicbert/blob/master/run_classifier.py) from this repository and copy it to the base folder, overwriting `run_classifier.py` from the Google BERT master repository.
   
@@ -91,7 +91,7 @@ The following steps will train a BERT model and perform some testing and predict
 
 ### Step 2: Prepare Data
 
-* Make a subfolder in the base folder called `input` in the base folder.
+* Make a subfolder called `input` in the base folder.
 
 * Prepare the TSV files using one of the following three options:
 
